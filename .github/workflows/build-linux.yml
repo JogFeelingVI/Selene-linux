@@ -1,0 +1,48 @@
+name: Build Selene Linux
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # 允许你手动点击按钮触发编译
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 拉取源码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 安装 Linux 编译依赖
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev
+
+      # 3. 配置 Flutter 环境
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      # 4. 获取 Flutter 依赖包
+      - name: Install Flutter packages
+        run: flutter pub get
+
+      # 5. 编译 Linux 原生版本
+      - name: Build Linux app
+        run: flutter build linux --release
+
+      # 6. 将编译好的 bundle 目录打包为 tar.gz
+      - name: Package build
+        run: |
+          cd build/linux/x64/release/
+          tar -czvf selene-linux-x64.tar.gz bundle/
+
+      # 7. 上传编译结果到 GitHub Artifacts（供下载）
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: selene-linux-release
+          path: build/linux/x64/release/selene-linux-x64.tar.gz
