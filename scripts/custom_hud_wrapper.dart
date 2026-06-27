@@ -1,15 +1,16 @@
+// scripts/custom_hud_wrapper.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 class CustomHudWrapper extends StatefulWidget {
   final Widget child;
-  final VideoController controller;
+  final VideoController? controller; // 核心修正：允许传入为 null 的控制器
 
   const CustomHudWrapper({
     super.key,
     required this.child,
-    required this.controller,
+    this.controller, // 允许为 null 的构造函数
   });
 
   @override
@@ -33,28 +34,22 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
     super.dispose();
   }
 
-  // 全局按键捕获与调试诊断逻辑
+  // 全局按键捕获逻辑
   bool _handleGlobalKeyEvent(KeyEvent event) {
+    // 如果控制器尚未初始化（为 null），不处理键盘事件
+    if (widget.controller == null) return false;
+
     if (event is KeyDownEvent) {
       final keys = HardwareKeyboard.instance.logicalKeysPressed;
       
-      // 极其稳健的 Shift 判定：物理状态判断 + 键集扫描判定
-      final isShiftPressed = HardwareKeyboard.instance.isShiftPressed ||
-                             keys.contains(LogicalKeyboardKey.shiftLeft) || 
+      // 同时兼容左 Shift 和右 Shift
+      final isShiftPressed = keys.contains(LogicalKeyboardKey.shiftLeft) || 
                              keys.contains(LogicalKeyboardKey.shiftRight);
                              
-      final isBackspace = event.logicalKey == LogicalKeyboardKey.backspace;
-      final isF12 = event.logicalKey == LogicalKeyboardKey.f12;
-
-      // 实时终端调试打印（启动时用 ./selene 即可在终端实时观测）
-      print("【HUD 调试】按下按键: ${event.logicalKey.debugName} | Shift状态: $isShiftPressed | 是否为 F12: $isF12");
-
-      // 触发条件：[Shift + Backspace] 或者 单独按下 [F12]
-      if ((isShiftPressed && isBackspace) || isF12) {
+      if (isShiftPressed && event.logicalKey == LogicalKeyboardKey.backspace) {
         setState(() {
           _showStats = !_showStats; // 切换显示状态
         });
-        print("【HUD 调试】成功触发 HUD 状态切换！当前显示状态: $_showStats");
         return true; // 消费此按键事件
       }
     }
@@ -70,15 +65,16 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    final player = widget.controller.player;
+    // 使用可空调用符号安全获取 player
+    final player = widget.controller?.player;
 
     return Stack(
       children: [
         // 渲染原有的视频播放器
         widget.child,
 
-        // 渲染 HUD 信息
-        if (_showStats)
+        // 只有在开启显示，且 player 实例确实不为 null 时，才渲染 HUD
+        if (_showStats && player != null)
           Positioned(
             top: 20,
             left: 20,
@@ -121,7 +117,7 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
                         style: const TextStyle(color: Colors.white, fontSize: 12),
                       ),
                       const Text(
-                        "快捷键: Left-Shift+Backspace 或 F12 隐藏",
+                        "快捷键: Left-Shift + Backspace 隐藏",
                         style: TextStyle(color: Colors.white38, fontSize: 10),
                       ),
                     ],
