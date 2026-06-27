@@ -67,19 +67,21 @@ def main():
         print(f"错误: 未找到源 HUD 模板文件 {source_hud_path}！")
         sys.exit(1)
 
-    # 自动定位播放器 Dart 文件
+    # 自动定位真正包含 Video(controller: ) 组件的 Dart 文件
     target_file = None
+    video_widget_pattern = re.compile(r'\bVideo\s*\(\s*controller\s*:')
+    
     for root, dirs, files in os.walk('lib'):
         for file in files:
             if not file.endswith('.dart'):
                 continue
                 
             path = os.path.join(root, file)
-            # 直接打开文件，不再使用容易因对齐导致语法报错的 try-except 块
             with open(path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
                 
-            if '=== PlayerScreen' in content or 'Video(controller:' in content:
+            # 核心修正：必须真正包含 Video 实例化代码，才视作目标文件
+            if video_widget_pattern.search(content):
                 target_file = path
                 break
                 
@@ -100,7 +102,7 @@ def main():
             f.write(hud_code)
         print(f"已自动创建组件: {hud_path}")
             
-        # 3. 读取目标播放器文件
+        # 3. 读取目标播放器文件内容
         with open(target_file, 'r', encoding='utf-8') as f:
             code = f.read()
         
@@ -119,7 +121,7 @@ def main():
             print("【严重错误】虽然找到了播放器文件，但未能成功定位并包装 Video(controller: ...) 组件！")
             sys.exit(1) # 强行终止编译，让 Action 报错变红
     else:
-        print("【错误】未能在项目中找到对应的播放器 Dart 文件！")
+        print("【错误】未能在项目中定位到任何包含 'Video(controller: ...)' 的 Dart 源码文件！")
         sys.exit(1)
 
 if __name__ == '__main__':
