@@ -115,7 +115,7 @@ def main():
             print(f"【成功】代码热补丁注入成功！成功包装了 {num_subs} 个 Video 播放器组件。")
         else:
             print("【严重错误】虽然找到了播放器文件，但未能成功定位并包装 Video(controller: ...) 组件！")
-            sys.exit(1) # 强行终止编译，让 GitHub Action 报错变红
+            sys.exit(1) # 强行终止编译，让 Action 报错变红
     else:
         print("【错误】未能在项目中找到对应的播放器 Dart 文件！")
         sys.exit(1)
