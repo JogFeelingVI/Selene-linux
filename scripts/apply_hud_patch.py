@@ -71,18 +71,20 @@ def main():
     target_file = None
     for root, dirs, files in os.walk('lib'):
         for file in files:
-            if file.endswith('.dart'):
-                path = os.path.join(root, file)
-                try:
-                    with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-                        if '=== PlayerScreen' in content or 'Video(controller:' in content:
-                            target_file = path
-                            break
-                    except Exception:
-                        pass
-            if target_file:
+            if not file.endswith('.dart'):
+                continue
+                
+            path = os.path.join(root, file)
+            # 直接打开文件，不再使用容易因对齐导致语法报错的 try-except 块
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+                
+            if '=== PlayerScreen' in content or 'Video(controller:' in content:
+                target_file = path
                 break
+                
+        if target_file:
+            break
 
     if target_file:
         target_dir = os.path.dirname(target_file)
