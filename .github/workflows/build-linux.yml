@@ -1,7 +1,7 @@
 name: Build Selene Linux
 
 on:
-  workflow_dispatch: # 仅保留手动触发，删除所有自动同步/提交触发
+  workflow_dispatch: # 仅手动触发
 
 jobs:
   build:
@@ -18,24 +18,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev
 
-      # 3. 配置 Flutter 环境
+      # 3. 运行项目中的 Python 脚本，直接执行热补丁注入（超清爽、超易调试）
+      - name: Apply Custom HUD Patch
+        run: python3 scripts/apply_hud_patch.py
+
+      # 4. 配置 Flutter 环境
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
 
-      # 4. 获取 Flutter 依赖包
+      # 5. 获取 Flutter 依赖包
       - name: Install Flutter packages
         run: flutter pub get
 
-      # 5. 编译 Linux 原生版本
+      # 6. 编译 Linux 原生版本
       - name: Build Linux app
         run: flutter build linux --release
 
-      # 6. 直接上传编译好的 bundle 目录内容
-      # GitHub 会自动将其打包为 zip 压缩包，且保留 Linux 的可执行权限（chmod +x）
+      # 7. 上传编译产物
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: selene-linux-x64 # 用户下载下来的压缩包文件名（解压后即是绿色版软件）
-          path: build/linux/x64/release/bundle/ # 直接指向 bundle 目录内部
+          name: selene-linux-x64
+          path: build/linux/x64/release/bundle/
