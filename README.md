@@ -44,6 +44,21 @@ chmod +x selene
 
 ---
 
+## 📁 项目特殊目录与脚本说明 (Scripts Directory)
+
+本项目包含一个专属的 **`scripts/`** 目录。该目录搭载了**编译时自动化插桩（Hot-Patching）系统**。它允许你在不污染、不修改原版 Dart 源码的前提下，为软件注入自定义功能。
+
+由于本目录以及工作流文件属于本 Fork 项目专属，**在与官方上游（Upstream）同步时，绝对不会产生任何 Git 代码合并冲突**。
+
+### 目录结构与作用：
+* 📂 **`scripts/`**
+  * 📄 **`custom_hud_wrapper.dart`**：全局键盘监听的视频信息浮层（HUD）原生 Dart 源码。
+    * *如果你想自定义 HUD 界面、修改文本样式、或添加新的播放状态，请直接在此文件中进行修改。你可以在 IDE 中享受完整的 Dart 语法高亮、自动补全和语法检测。*
+  * 📄 **`apply_hud_patch.py`**：编译时自动化插桩 Python 脚本。
+    * *在 GitHub Actions 编译时，工作流会自动执行此脚本。它会在 `lib/` 下检索并自动寻找播放器主文件，在同级目录下生成 `custom_hud_wrapper.dart` 并通过正则完成自动组件包裹。*
+
+---
+
 ## ⚠️ Linux 平台已知限制与常见问题 (Known Issues)
 
 ### 1. 点击“画中画 (PiP)”按钮没有任何画面反应
@@ -53,7 +68,7 @@ chmod +x selene
 
 ### 2. 在 Wayland 桌面环境下鼠标光标消失或悬停特效丢失
 - **现象**：当鼠标划入软件窗口时，光标可能直接隐形消失，或者滑过按钮时没有悬停变色等交互反馈。终端控制台会警告：`Unable to load from the cursor theme`。
-- **原因**：部分 Linux 系统在使用 **Wayland** 协议时，对 GTK 鼠标主题的兼容存在局限，导致内嵌的 Flutter 引擎无法正常读取并渲染系统光标。
+- **原因**：部分 Linux 系统在使用 **Wayland** 协议时，对 GTK 鼠标主题的兼容存在局限，导致内嵌的 Flutter 引擎无法正常读取并渲染系统光标 [1]。
 - **解决方案**：
   - **方法 A：推荐退回到 X11 兼容模式运行**（兼容性极好，能完美恢复光标和动画）：
     ```bash
@@ -94,14 +109,14 @@ chmod +x selene
 
 ### 2. 编译步骤
 ```bash
-# 启用 Linux 桌面编译支持
-flutter config --enable-linux-desktop
+# 1. 运行本地插桩脚本（按需，可自动完成代码注入）
+python3 scripts/apply_hud_patch.py
 
-# 获取项目依赖
+# 2. 启用 Linux 桌面编译支持并获取依赖
+flutter config --enable-linux-desktop
 flutter pub get
 
-# 编译 Linux 原生 Release 版本
+# 3. 编译 Linux 原生 Release 版本
 flutter build linux --release
 ```
-编译产物将保存在 `build/linux/x64/release/bundle/`。
-```
+编译产物将保存在 `build/linux/x64/release/bundle/`
