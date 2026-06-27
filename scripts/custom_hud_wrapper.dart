@@ -1,4 +1,3 @@
-// scripts/custom_hud_wrapper.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -23,31 +22,40 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
   @override
   void initState() {
     super.initState();
-    // 在页面初始化时，注册全局键盘监听器
+    // 注册全局键盘监听器
     HardwareKeyboard.instance.addHandler(_handleGlobalKeyEvent);
   }
 
   @override
   void dispose() {
-    // 页面销毁时，注销监听器防止内存泄漏
+    // 注销监听器，防止内存泄漏
     HardwareKeyboard.instance.removeHandler(_handleGlobalKeyEvent);
     super.dispose();
   }
 
-  // 全局按键捕获逻辑
+  // 全局按键捕获与调试诊断逻辑
   bool _handleGlobalKeyEvent(KeyEvent event) {
     if (event is KeyDownEvent) {
       final keys = HardwareKeyboard.instance.logicalKeysPressed;
       
-      // 同时兼容左 Shift 和右 Shift
-      final isShiftPressed = keys.contains(LogicalKeyboardKey.shiftLeft) || 
+      // 极其稳健的 Shift 判定：物理状态判断 + 键集扫描判定
+      final isShiftPressed = HardwareKeyboard.instance.isShiftPressed ||
+                             keys.contains(LogicalKeyboardKey.shiftLeft) || 
                              keys.contains(LogicalKeyboardKey.shiftRight);
                              
-      if (isShiftPressed && event.logicalKey == LogicalKeyboardKey.backspace) {
+      final isBackspace = event.logicalKey == LogicalKeyboardKey.backspace;
+      final isF12 = event.logicalKey == LogicalKeyboardKey.f12;
+
+      // 实时终端调试打印（启动时用 ./selene 即可在终端实时观测）
+      print("【HUD 调试】按下按键: ${event.logicalKey.debugName} | Shift状态: $isShiftPressed | 是否为 F12: $isF12");
+
+      // 触发条件：[Shift + Backspace] 或者 单独按下 [F12]
+      if ((isShiftPressed && isBackspace) || isF12) {
         setState(() {
           _showStats = !_showStats; // 切换显示状态
         });
-        return true; // 事件已消费
+        print("【HUD 调试】成功触发 HUD 状态切换！当前显示状态: $_showStats");
+        return true; // 消费此按键事件
       }
     }
     return false;
@@ -113,7 +121,7 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
                         style: const TextStyle(color: Colors.white, fontSize: 12),
                       ),
                       const Text(
-                        "快捷键: Left-Shift + Backspace 隐藏",
+                        "快捷键: Left-Shift+Backspace 或 F12 隐藏",
                         style: TextStyle(color: Colors.white38, fontSize: 10),
                       ),
                     ],
