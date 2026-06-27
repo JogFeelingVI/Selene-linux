@@ -1,9 +1,7 @@
 name: Build Selene Linux
 
 on:
-  push:
-    branches: [ "main", "master" ]
-  workflow_dispatch: # 允许你手动点击按钮触发编译
+  workflow_dispatch: # 仅保留手动触发，删除所有自动同步/提交触发
 
 jobs:
   build:
@@ -34,15 +32,10 @@ jobs:
       - name: Build Linux app
         run: flutter build linux --release
 
-      # 6. 将编译好的 bundle 目录打包为 tar.gz
-      - name: Package build
-        run: |
-          cd build/linux/x64/release/
-          tar -czvf selene-linux-x64.tar.gz bundle/
-
-      # 7. 上传编译结果到 GitHub Artifacts（供下载）
+      # 6. 直接上传编译好的 bundle 目录内容
+      # GitHub 会自动将其打包为 zip 压缩包，且保留 Linux 的可执行权限（chmod +x）
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: selene-linux-release
-          path: build/linux/x64/release/selene-linux-x64.tar.gz
+          name: selene-linux-x64 # 用户下载下来的压缩包文件名（解压后即是绿色版软件）
+          path: build/linux/x64/release/bundle/ # 直接指向 bundle 目录内部
