@@ -21,7 +21,7 @@
 1. 点击本项目顶部的 **Actions** 标签页。
 2. 在左侧菜单中选择 **Build Selene Linux** 工作流。
 3. 点击右侧的 **Run workflow** 手动触发编译（或者直接查看历史已完成的绿色对勾运行记录）。
-4. 编译完成后（约 5-8 分钟），点击该次运行记录，拉到页面最下方的 **Artifacts** 区域，下载打包好的 **`selene-linux-x64`**（压缩包格式为 `.zip`）。
+4. 编译完成后（约 5-8 分钟），点击该次运行记录，拉到页面最下方的 **Artifacts** 区域，点击下载打包好的 **`selene-linux-x64`**（压缩包格式为 `.zip`）。
 
 ---
 
@@ -40,3 +40,68 @@ chmod +x selene
 
 # 3. 运行原生客户端
 ./selene
+```
+
+---
+
+## ⚠️ Linux 平台已知限制与常见问题 (Known Issues)
+
+### 1. 点击“画中画 (PiP)”按钮没有任何画面反应
+- **现象**：播放界面中点击“画中画”按钮时，窗口不会弹出，没有任何视觉反馈。终端控制台会抛出异常：`MissingPluginException(No implementation found for method setup on channel pip)`。
+- **原因**：上游原项目使用的 `pip` (Picture-in-Picture) 插件仅编写了 Windows、Android 和 iOS 的底层实现，**目前缺失 Linux 平台的原生 C++ 底层代码**。
+- **解决方案**：此为原版代码在 Linux 端的适配缺失。在作者重构支持 Linux 画中画前，该功能在 Linux 原生版本下暂时无法使用。
+
+### 2. 在 Wayland 桌面环境下鼠标光标消失或悬停特效丢失
+- **现象**：当鼠标划入软件窗口时，光标可能直接隐形消失，或者滑过按钮时没有悬停变色等交互反馈。终端控制台会警告：`Unable to load from the cursor theme`。
+- **原因**：部分 Linux 系统在使用 **Wayland** 协议时，对 GTK 鼠标主题的兼容存在局限，导致内嵌的 Flutter 引擎无法正常读取并渲染系统光标。
+- **解决方案**：
+  - **方法 A：推荐退回到 X11 兼容模式运行**（兼容性极好，能完美恢复光标和动画）：
+    ```bash
+    GDK_BACKEND=x11 ./selene
+    ```
+  - **方法 B**：如果坚持使用 Wayland，请在启动时强行指定系统现有的鼠标主题变量（将下文的 `Adwaita` 替换为您系统当前使用的鼠标主题名）：
+    ```bash
+    XCURSOR_THEME=Adwaita GDK_BACKEND=wayland ./selene
+    ```
+
+---
+
+## 🔄 如何同步官方版本？
+
+由于本项目是直接 Fork 自官方仓库，当官方发布新版本或修复 Bug 时，你可以非常方便地同步并自己编译最新版：
+
+1. 打开你 Fork 的这个 GitHub 仓库主页。
+2. 点击右上方的 **Sync fork**（同步分叉）按钮，选择 **Update branch**。
+3. 同步官方最新代码后，进入 **Actions** 页面，手动运行一次 **Build Selene Linux** 工作流。
+4. 下载最新编译出的压缩包，即可完成版本号和代码的完全同步。
+
+---
+
+## 🛠️ 本地手动编译（针对开发者/高级用户）
+
+如果你希望在自己的 Linux 本地机器上进行编译：
+
+### 1. 安装编译依赖
+- **Ubuntu / Debian 系**:
+  ```bash
+  sudo apt update && sudo apt install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev mpv git
+  sudo snap install flutter --classic
+  ```
+- **Arch Linux / Manjaro**:
+  ```bash
+  sudo pacman -S clang cmake ninja pkg-config gtk3 xz mpv git flutter
+  ```
+
+### 2. 编译步骤
+```bash
+# 启用 Linux 桌面编译支持
+flutter config --enable-linux-desktop
+
+# 获取项目依赖
+flutter pub get
+
+# 编译 Linux 原生 Release 版本
+flutter build linux --release
+```
+编译产物将保存在 `build/linux/x64/release/bundle/`。
+```
