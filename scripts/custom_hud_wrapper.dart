@@ -19,8 +19,16 @@ class CustomHudWrapper extends StatefulWidget {
 }
 
 class _CustomHudWrapperState extends State<CustomHudWrapper> {
-  bool _showStats = false;
+  // 0: 隐藏, 1: 极简模式, 2: 详细监控面板
+  int _hudMode = 0; 
   OverlayEntry? _overlayEntry; // 全局悬浮图层入口
+
+  // 用于拖拽的坐标偏置量
+  double _xOffset = 20.0;
+  double _yOffset = 40.0;
+
+  // 鼠标悬停透明度控制
+  double _hudOpacity = 0.75;
 
   @override
   void initState() {
@@ -37,12 +45,12 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
     super.dispose();
   }
 
-  // 切换显示状态
-  void _toggleHud() {
+  // 切换显示状态（循环多档模式）
+  void _cycleHudMode() {
     setState(() {
-      _showStats = !_showStats;
+      _hudMode = (_hudMode + 1) % 3;
     });
-    if (_showStats) {
+    if (_hudMode > 0) {
       _showHud();
     } else {
       _hideHud();
@@ -71,7 +79,7 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
 
   // 在应用最顶层创建并挂载悬浮图层
   void _showHud() {
-    _hideHud(); // 挂载前先清理旧图层，防止重复堆叠
+    _overlayEntry?.remove(); // 挂载前先清理旧图层，防止重复堆叠
 
     _overlayEntry = OverlayEntry(
       builder: (context) {
@@ -79,63 +87,62 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
         if (player == null) return const SizedBox.shrink();
 
         return Positioned(
-          top: 40, // 稍微向下偏移，避开系统栏
-          left: 20,
+          top: _yOffset,
+          left: _xOffset,
           child: Material(
             type: MaterialType.transparency, // 必须包裹 Material
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.75),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white24, width: 1),
-              ),
-              child: StreamBuilder(
-                // 核心优化：使用每 500 毫秒触发一次的定期流，保证视频暂停时本地时钟仍在正常走动
-                stream: Stream.periodic(const Duration(milliseconds: 1000)),
-                builder: (context, snapshot) {
-                  final currentPos = player.state.position;
-                  final totalDur = player.state.duration;
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        "📊 视频渲染统计信息",
-                        style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                      const SizedBox(height: 8),
-                      // 新增：系统本地时间行
-                      Text(
-                        "系统时间: ${_formatSystemTime()}",
-                        style: const TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.w500, fontSize: 12),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        "视频分辨率: ${player.state.width ?? 0} x ${player.state.height ?? 0}",
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                      Text(
-                        "当前进度: ${_formatDuration(currentPos)} / ${_formatDuration(totalDur)}",
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                      const Text(
-                        "渲染模式: 硬件加速 (EGL Context - 独占通道)",
-                        style: TextStyle(color: Colors.greenAccent, fontSize: 12),
-                      ),
-                      Text(
-                        "播放速率: ${player.state.rate.toStringAsFixed(1)}x",
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        "快捷键: Left-Shift + Backspace 隐藏",
-                        style: TextStyle(color: Colors.white38, fontSize: 10),
-                      ),
-                    ],
-                  );
+            child: GestureDetector(
+              // 1. 拖拽支持：通过累加偏移量并手动标记图层重绘实现平滑拖动
+              onPanUpdate: (details) {
+                _xOffset += details.delta.dx;
+                _yOffset += details.delta.dy;
+                _overlayEntry?.markNeedsBuild();
+              },
+              child: MouseRegion(
+                // 2. 悬停反馈：鼠标移入调高透明度，移出调低以减少视觉遮挡
+                onEnter: (_) {
+                  _hudOpacity = 1.0;
+                  _overlayEntry?.markNeedsBuild();
                 },
+                onExit: (_) {
+                  _hudOpacity = 0.75;
+                  _overlayEntry?.markNeedsBuild();
+                },
+                child: Opacity(
+                  opacity: _hudOpacity,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.85),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white12, width: 1),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black54,
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: StreamBuilder(
+                      // 局部刷新机制
+                      stream: Stream.periodic(const Duration(milliseconds: 1000)),
+                      builder: (context, snapshot) {
+                        final currentPos = player.state.position;
+                        final totalDur = player.state.duration;
+                        final isPlaying = player.state.playing;
+                        final isBuffering = player.state.buffering;
+                        final bufferDur = player.state.buffer;
+
+                        if (_hudMode == 1) {
+                          return _buildMinimalHud(player, currentPos, totalDur, isPlaying);
+                        } else {
+                          return _buildAdvancedHud(player, currentPos, totalDur, isPlaying, isBuffering, bufferDur);
+                        }
+                      },
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -152,10 +159,159 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
     }
   }
 
+  // 极简模式 HUD UI
+  Widget _buildMinimalHud(dynamic player, Duration currentPos, Duration totalDur, bool isPlaying) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.video_settings, color: Colors.cyanAccent, size: 14),
+        const SizedBox(width: 6),
+        Text(
+          "${player.state.width ?? 0}x${player.state.height ?? 0}",
+          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(width: 12),
+        Icon(isPlaying ? Icons.play_arrow : Icons.pause, color: Colors.greenAccent, size: 12),
+        const SizedBox(width: 4),
+        Text(
+          "${_formatDuration(currentPos)} / ${_formatDuration(totalDur)}",
+          style: const TextStyle(color: Colors.white, fontSize: 11),
+        ),
+      ],
+    );
+  }
+
+  // 详细监控面板 UI
+  Widget _buildAdvancedHud(
+    dynamic player,
+    Duration currentPos,
+    Duration totalDur,
+    bool isPlaying,
+    bool isBuffering,
+    Duration bufferDur,
+  ) {
+    // 3. 轨道信息安全检测：尝试从 media_kit 获取当前音轨和字幕轨语言
+    String audioTrackInfo = "未知";
+    String subtitleTrackInfo = "无";
+    try {
+      final audioTrack = player.state.track.audio;
+      final subTrack = player.state.track.subtitle;
+      audioTrackInfo = audioTrack.title ?? audioTrack.language ?? "未知";
+      subtitleTrackInfo = subTrack.title ?? subTrack.language ?? "无";
+    } catch (_) {
+      // 防止某些低版本或特殊源由于属性不存在导致崩溃
+    }
+
+    return SizedBox(
+      width: 280,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 4. 简易控制区与关闭按钮
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "📊 视频与系统状态面板",
+                style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => player.playOrPause(),
+                    child: Icon(
+                      isPlaying ? Icons.pause_circle : Icons.play_circle,
+                      color: Colors.greenAccent,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () {
+                      _hideHud();
+                    },
+                    child: const Icon(
+                      Icons.cancel,
+                      color: Colors.redAccent,
+                      size: 18,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const Divider(color: Colors.white12, height: 12, thickness: 1),
+          
+          // 系统状态行
+          _buildInfoRow("系统时间", _formatSystemTime(), Colors.yellowAccent),
+          _buildInfoRow("渲染模式", "硬件加速 (EGL Context - 独占通道)", Colors.greenAccent),
+          const SizedBox(height: 4),
+
+          // 媒体状态行
+          _buildInfoRow("分辨率", "${player.state.width ?? 0} x ${player.state.height ?? 0}", Colors.white),
+          _buildInfoRow("当前进度", "${_formatDuration(currentPos)} / ${_formatDuration(totalDur)}", Colors.white),
+          _buildInfoRow("播放速率", "${player.state.rate.toStringAsFixed(1)}x", Colors.white),
+          const SizedBox(height: 4),
+
+          // 5. 新增：网络与音轨状态行
+          _buildInfoRow(
+            "网络缓冲",
+            isBuffering ? "加载中..." : "已缓冲 ${_formatDuration(bufferDur)}",
+            isBuffering ? Colors.orangeAccent : Colors.white70,
+          ),
+          _buildInfoRow("当前音轨", audioTrackInfo, Colors.white70),
+          _buildInfoRow("当前字幕", subtitleTrackInfo, Colors.white70),
+          const Divider(color: Colors.white12, height: 12, thickness: 1),
+
+          // 提示行
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "💡 拖拽面板可移动位置",
+                style: TextStyle(color: Colors.white38, fontSize: 9),
+              ),
+              Text(
+                "Shift+Backspace 切换",
+                style: TextStyle(color: Colors.white38, fontSize: 9),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 辅助构建排版行
+  Widget _buildInfoRow(String label, String value, Color valueColor) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            "$label:",
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+          Text(
+            value,
+            style: TextStyle(color: valueColor, fontSize: 11, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
   // 销毁和隐藏悬浮图层
   void _hideHud() {
     _overlayEntry?.remove();
     _overlayEntry = null;
+    if (mounted) {
+      setState(() {
+        _hudMode = 0;
+      });
+    }
   }
 
   // 全局按键捕获
@@ -168,7 +324,7 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
                              keys.contains(LogicalKeyboardKey.shiftRight);
                              
       if (isShiftPressed && event.logicalKey == LogicalKeyboardKey.backspace) {
-        _toggleHud();
+        _cycleHudMode();
         return true;
       }
     }
@@ -177,7 +333,7 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    // build 方法依然保持 100% 纯净，直接原样返回播放器组件
+    // 依然维持非侵入式，直接原样返回播放器组件
     return widget.child; 
   }
 }
