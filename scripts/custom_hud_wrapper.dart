@@ -181,6 +181,37 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
     );
   }
 
+  // 构建单个速度按钮组件
+  Widget _buildSpeedButton(dynamic player, double rate, String label) {
+    // 允许微小的浮点数偏差
+    final isCurrent = (player.state.rate - rate).abs() < 0.05;
+    return GestureDetector(
+      onTap: () async {
+        await player.setRate(rate);
+        _overlayEntry?.markNeedsBuild(); // 触发即时更新 UI 上的选中状态
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+        decoration: BoxDecoration(
+          color: isCurrent ? Colors.cyanAccent.withOpacity(0.2) : Colors.white10,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isCurrent ? Colors.cyanAccent : Colors.white24,
+            width: 0.5,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isCurrent ? Colors.cyanAccent : Colors.white70,
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
   // 详细监控面板 UI
   Widget _buildAdvancedHud(
     dynamic player,
@@ -190,7 +221,7 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
     bool isBuffering,
     Duration bufferDur,
   ) {
-    // 3. 轨道信息安全检测：尝试从 media_kit 获取当前音轨和字幕轨语言
+    // 轨道信息安全检测：尝试从 media_kit 获取当前音轨和字幕轨语言
     String audioTrackInfo = "未知";
     String subtitleTrackInfo = "无";
     try {
@@ -208,7 +239,7 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 4. 简易控制区与关闭按钮
+          // 简易控制区与关闭按钮
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -251,10 +282,37 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
           // 媒体状态行
           _buildInfoRow("分辨率", "${player.state.width ?? 0} x ${player.state.height ?? 0}", Colors.white),
           _buildInfoRow("当前进度", "${_formatDuration(currentPos)} / ${_formatDuration(totalDur)}", Colors.white),
-          _buildInfoRow("播放速率", "${player.state.rate.toStringAsFixed(1)}x", Colors.white),
+          
+          // 3. 速度控制行：展示当前速率并提供 1.0x, 1.5x, 2.0x 快捷选项
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "播放速率:",
+                  style: TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+                Row(
+                  children: [
+                    Text(
+                      "${player.state.rate.toStringAsFixed(1)}x",
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildSpeedButton(player, 1.0, "1.0x"),
+                    const SizedBox(width: 4),
+                    _buildSpeedButton(player, 1.5, "1.5x"),
+                    const SizedBox(width: 4),
+                    _buildSpeedButton(player, 2.0, "2.0x"),
+                  ],
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 4),
 
-          // 5. 新增：网络与音轨状态行
+          // 网络与音轨状态行
           _buildInfoRow(
             "网络缓冲",
             isBuffering ? "加载中..." : "已缓冲 ${_formatDuration(bufferDur)}",
@@ -269,7 +327,7 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "💡 拖拽面板可移动位置",
+                "💡 Shift+1/2 可快捷调速",
                 style: TextStyle(color: Colors.white38, fontSize: 9),
               ),
               Text(
@@ -316,15 +374,31 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
 
   // 全局按键捕获
   bool _handleGlobalKeyEvent(KeyEvent event) {
-    if (widget.controller == null) return false;
+    final player = widget.controller?.player;
+    if (player == null) return false;
 
     if (event is KeyDownEvent) {
       final keys = HardwareKeyboard.instance.logicalKeysPressed;
       final isShiftPressed = keys.contains(LogicalKeyboardKey.shiftLeft) || 
                              keys.contains(LogicalKeyboardKey.shiftRight);
                              
+      // Shift + Backspace: 切换 HUD 模式
       if (isShiftPressed && event.logicalKey == LogicalKeyboardKey.backspace) {
         _cycleHudMode();
+        return true;
+      }
+
+      // 4. 新增快捷键：Shift + 2 -> 快速切换至 2.0x 速率
+      if (isShiftPressed && event.logicalKey == LogicalKeyboardKey.digit2) {
+        player.setRate(2.0);
+        _overlayEntry?.markNeedsBuild(); // 手动标记重绘，使 UI 获得即时反馈
+        return true;
+      }
+
+      // 5. 新增快捷键：Shift + 1 -> 恢复 1.0x 速率
+      if (isShiftPressed && event.logicalKey == LogicalKeyboardKey.digit1) {
+        player.setRate(1.0);
+        _overlayEntry?.markNeedsBuild(); // 手动标记重绘，使 UI 获得即时反馈
         return true;
       }
     }
@@ -333,7 +407,7 @@ class _CustomHudWrapperState extends State<CustomHudWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    // 依然维持非侵入式，直接原样返回播放器组件
+    // 维持非侵入式，直接原样返回播放器组件
     return widget.child; 
   }
 }
